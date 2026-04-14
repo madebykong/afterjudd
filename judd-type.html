@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Judd Type Machine</title>
+<style>
+  :root {
+    --ink: #111;
+    --paper: #f2efe8;
+    --rule: #111;
+    --empty: #e6e2d7;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px;
+    gap: 20px;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .meta {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 32px;
+    min-height: 0;
+  }
+
+  .stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  /* The shelf: 7 rows with heights 1..7, 7 equal columns. */
+  .shelf {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: 1fr 2fr 3fr 4fr 5fr 6fr 7fr;
+    width: min(80vh, 100%);
+    aspect-ratio: 7 / 28; /* 7 cols wide, 1+2+3+4+5+6+7 = 28 units tall */
+    height: 100%;
+    max-height: 90vh;
+    border: 1px solid var(--rule);
+    background: var(--rule);
+    gap: 1px;
+  }
+
+  .cell {
+    background: var(--empty);
+    transition: background 120ms ease;
+  }
+
+  .cell.on {
+    background: var(--ink);
+  }
+
+  aside {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 24px;
+    width: 260px;
+  }
+
+  .input-block label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.6;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 28px;
+    font-family: inherit;
+    text-align: center;
+    text-transform: uppercase;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    outline: none;
+    letter-spacing: 0.1em;
+  }
+
+  input[type="text"]:focus {
+    background: #fff;
+  }
+
+  .legend {
+    font-size: 11px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .legend p { margin: 0 0 8px 0; }
+
+  .legend table {
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+
+  .legend td {
+    padding: 2px 10px 2px 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 12px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Type Machine &middot; After Judd</h1>
+    <div class="meta">7 × 7 &middot; rows 1 : 2 : 3 : 4 : 5 : 6 : 7</div>
+  </header>
+
+  <main>
+    <div class="stage">
+      <div class="shelf" id="shelf" aria-label="Letter plotted on a seven by seven grid"></div>
+    </div>
+
+    <aside>
+      <div class="input-block">
+        <label for="letter">Type a letter</label>
+        <input id="letter" type="text" maxlength="1" autocomplete="off" spellcheck="false" value="A" />
+      </div>
+
+      <div class="legend">
+        <p>One glyph at a time.<br>A–Z and 0–9.</p>
+        <table>
+          <tr><td>Row 1</td><td>1×</td></tr>
+          <tr><td>Row 2</td><td>2×</td></tr>
+          <tr><td>Row 3</td><td>3×</td></tr>
+          <tr><td>Row 4</td><td>4×</td></tr>
+          <tr><td>Row 5</td><td>5×</td></tr>
+          <tr><td>Row 6</td><td>6×</td></tr>
+          <tr><td>Row 7</td><td>7×</td></tr>
+        </table>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <span>Dot-matrix on a stacked shelf</span>
+    <span id="count">49 cells</span>
+  </footer>
+
+<script>
+  // 7x7 bitmap font. Each row is a 7-character string of 0/1.
+  const FONT = {
+    " ": [
+      "0000000","0000000","0000000","0000000","0000000","0000000","0000000"
+    ],
+    "A": [
+      "0011100","0100010","1000001","1000001","1111111","1000001","1000001"
+    ],
+    "B": [
+      "1111110","1000001","1000001","1111110","1000001","1000001","1111110"
+    ],
+    "C": [
+      "0111110","1000001","1000000","1000000","1000000","1000001","0111110"
+    ],
+    "D": [
+      "1111100","1000010","1000001","1000001","1000001","1000010","1111100"
+    ],
+    "E": [
+      "1111111","1000000","1000000","1111110","1000000","1000000","1111111"
+    ],
+    "F": [
+      "1111111","1000000","1000000","1111110","1000000","1000000","1000000"
+    ],
+    "G": [
+      "0111110","1000001","1000000","1000111","1000001","1000001","0111110"
+    ],
+    "H": [
+      "1000001","1000001","1000001","1111111","1000001","1000001","1000001"
+    ],
+    "I": [
+      "1111111","0001000","0001000","0001000","0001000","0001000","1111111"
+    ],
+    "J": [
+      "0000001","0000001","0000001","0000001","0000001","1000001","0111110"
+    ],
+    "K": [
+      "1000001","1000010","1000100","1111000","1000100","1000010","1000001"
+    ],
+    "L": [
+      "1000000","1000000","1000000","1000000","1000000","1000000","1111111"
+    ],
+    "M": [
+      "1000001","1100011","1010101","1001001","1000001","1000001","1000001"
+    ],
+    "N": [
+      "1000001","1100001","1010001","1001001","1000101","1000011","1000001"
+    ],
+    "O": [
+      "0111110","1000001","1000001","1000001","1000001","1000001","0111110"
+    ],
+    "P": [
+      "1111110","1000001","1000001","1111110","1000000","1000000","1000000"
+    ],
+    "Q": [
+      "0111110","1000001","1000001","1000001","1001001","1000101","0111011"
+    ],
+    "R": [
+      "1111110","1000001","1000001","1111110","1000100","1000010","1000001"
+    ],
+    "S": [
+      "0111111","1000000","1000000","0111110","0000001","0000001","1111110"
+    ],
+    "T": [
+      "1111111","0001000","0001000","0001000","0001000","0001000","0001000"
+    ],
+    "U": [
+      "1000001","1000001","1000001","1000001","1000001","1000001","0111110"
+    ],
+    "V": [
+      "1000001","1000001","1000001","0100010","0100010","0010100","0001000"
+    ],
+    "W": [
+      "1000001","1000001","1000001","1000001","1001001","1010101","0100010"
+    ],
+    "X": [
+      "1000001","0100010","0010100","0001000","0010100","0100010","1000001"
+    ],
+    "Y": [
+      "1000001","0100010","0010100","0001000","0001000","0001000","0001000"
+    ],
+    "Z": [
+      "1111111","0000010","0000100","0001000","0010000","0100000","1111111"
+    ],
+    "0": [
+      "0111110","1000011","1000101","1001001","1010001","1100001","0111110"
+    ],
+    "1": [
+      "0001000","0011000","0101000","0001000","0001000","0001000","0111110"
+    ],
+    "2": [
+      "0111110","1000001","0000001","0000010","0001100","0110000","1111111"
+    ],
+    "3": [
+      "1111110","0000001","0000001","0011110","0000001","0000001","1111110"
+    ],
+    "4": [
+      "0000100","0001100","0010100","0100100","1111111","0000100","0000100"
+    ],
+    "5": [
+      "1111111","1000000","1000000","1111110","0000001","0000001","1111110"
+    ],
+    "6": [
+      "0011110","0100000","1000000","1111110","1000001","1000001","0111110"
+    ],
+    "7": [
+      "1111111","0000001","0000010","0000100","0001000","0010000","0100000"
+    ],
+    "8": [
+      "0111110","1000001","1000001","0111110","1000001","1000001","0111110"
+    ],
+    "9": [
+      "0111110","1000001","1000001","0111111","0000001","0000010","0111100"
+    ]
+  };
+
+  const shelf = document.getElementById("shelf");
+  const input = document.getElementById("letter");
+
+  // Build 49 cells once, row-major (top row first).
+  const cells = [];
+  for (let r = 0; r < 7; r++) {
+    for (let c = 0; c < 7; c++) {
+      const div = document.createElement("div");
+      div.className = "cell";
+      div.dataset.row = r;
+      div.dataset.col = c;
+      shelf.appendChild(div);
+      cells.push(div);
+    }
+  }
+
+  function render(char) {
+    const key = (char || " ").toUpperCase();
+    const glyph = FONT[key] || FONT[" "];
+    for (let r = 0; r < 7; r++) {
+      const row = glyph[r];
+      for (let c = 0; c < 7; c++) {
+        const i = r * 7 + c;
+        const on = row.charAt(c) === "1";
+        cells[i].classList.toggle("on", on);
+      }
+    }
+  }
+
+  input.addEventListener("input", (e) => {
+    const v = e.target.value;
+    // Keep only the last character, uppercase it.
+    const ch = v.slice(-1).toUpperCase();
+    e.target.value = ch;
+    render(ch);
+  });
+
+  // Also accept typing anywhere on the page.
+  window.addEventListener("keydown", (e) => {
+    if (document.activeElement === input) return;
+    if (e.key.length === 1 && /[a-z0-9 ]/i.test(e.key)) {
+      input.value = e.key.toUpperCase();
+      render(input.value);
+      e.preventDefault();
+    }
+  });
+
+  render(input.value);
+</script>
+</body>
+</html>
