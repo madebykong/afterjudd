@@ -664,10 +664,15 @@
       const outDy = next[1] - curr[1];
       const outLen = Math.hypot(outDx, outDy) || 1;
 
-      // Clamp so a cut never exceeds half its edge -- adjacent corners
-      // sharing the same edge will at most meet at the midpoint.
-      const rIn = Math.min(desiredR, inLen / 2);
-      const rOut = Math.min(desiredR, outLen / 2);
+      // Clamp to half the shorter of the two adjacent edges. Using the
+      // same radius for both sides of the corner keeps it symmetric
+      // (1:1) even when one of its edges is shorter than the other, so
+      // we never get elongated corners. Taking half the shorter edge
+      // also guarantees two adjacent corners can never overlap on a
+      // shared edge.
+      const r = Math.min(desiredR, inLen / 2, outLen / 2);
+      const rIn = r;
+      const rOut = r;
 
       const pInX = curr[0] + (inDx / inLen) * rIn;
       const pInY = curr[1] + (inDy / inLen) * rIn;
