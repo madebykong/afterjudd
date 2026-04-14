@@ -337,6 +337,13 @@
         </div>
       </div>
 
+      <div class="control-block" id="width-block">
+        <label for="width">Width <span class="val" id="width-val">0</span></label>
+        <div class="slider-row">
+          <input id="width" type="range" min="0" max="100" value="0" />
+        </div>
+      </div>
+
       <div class="control-block">
         <label>Mode</label>
         <div class="toggle" id="mode-toggle">
@@ -375,6 +382,9 @@
   const strengthVal = document.getElementById("strength-val");
   const rowsInput = document.getElementById("rows");
   const colsInput = document.getElementById("cols");
+  const widthInput = document.getElementById("width");
+  const widthVal = document.getElementById("width-val");
+  const widthBlock = document.getElementById("width-block");
   const metaLine = document.getElementById("meta-line");
   const ratioLine = document.getElementById("ratio-line");
   const countEl = document.getElementById("count");
@@ -382,8 +392,35 @@
   // --- State ---
   let numRows = 7;
   let numCols = 7;
+  let stretch = 1;      // column-width multiplier in viewBox units
   let mode = "pixel";
   let currentChar = "A";
+
+  // Max aspect the user can dial the grid to: 5:4 (w:h).
+  const MAX_ASPECT = 5 / 4;
+
+  // Given rows/cols, return the max allowed column-width multiplier
+  // such that (numCols * stretch) / sumRows <= 5/4.  Always >= 1 so
+  // that stretch = 1 (natural) is always valid even if the natural
+  // aspect already exceeds 5:4.
+  function maxStretchFor(rows, cols) {
+    const s = sumRows(rows);
+    const m = (MAX_ASPECT * s) / cols;
+    return Math.max(1, m);
+  }
+
+  // Pull the slider value [0, 100] and turn it into an absolute stretch
+  // factor between 1 (natural) and maxStretchFor(...).
+  function recomputeStretch() {
+    const t = (parseInt(widthInput.value, 10) || 0) / 100;
+    const max = maxStretchFor(numRows, numCols);
+    stretch = 1 + (max - 1) * t;
+    // Disable the slider visually when there is no room to stretch
+    // (natural aspect already >= 5:4).
+    const hasRoom = max > 1.0001;
+    widthInput.disabled = !hasRoom;
+    widthBlock.classList.toggle("is-disabled", !hasRoom);
+  }
 
   const cells = [];
   let overlay = null; // SVG element, recreated on rebuildShelf
@@ -405,7 +442,6 @@
       { length: numRows },
       (_, i) => `${i + 1}fr`
     ).join(" ");
-    shelf.style.aspectRatio = `${numCols} / ${sumRows(numRows)}`;
 
     for (let r = 0; r < numRows; r++) {
       for (let c = 0; c < numCols; c++) {
@@ -418,16 +454,26 @@
       }
     }
 
-    // SVG overlay sits on top of the cells. Its viewBox is in cell-units
-    // (numCols wide, sumRows tall) so polygon coordinates map directly.
+    // SVG overlay sits on top of the cells. Its viewBox is in cell-units,
+    // with the column dimension scaled by `stretch` so polygon coordinates
+    // in x are `c * stretch` for any column c.
     overlay = document.createElementNS(SVG_NS, "svg");
     overlay.setAttribute("class", "overlay");
-    overlay.setAttribute("viewBox", `0 0 ${numCols} ${sumRows(numRows)}`);
     overlay.setAttribute("preserveAspectRatio", "none");
     shelf.appendChild(overlay);
 
+    applyStretchLayout();
     updateLabels();
     sizeShelf();
+  }
+
+  // Apply the current stretch to the shelf's aspect-ratio and the SVG
+  // viewBox. Called whenever rows, cols, or stretch change.
+  function applyStretchLayout() {
+    const viewW = numCols * stretch;
+    const viewH = sumRows(numRows);
+    shelf.style.aspectRatio = `${viewW} / ${viewH}`;
+    if (overlay) overlay.setAttribute("viewBox", `0 0 ${viewW} ${viewH}`);
   }
 
   function updateLabels() {
@@ -441,7 +487,7 @@
   function sizeShelf() {
     const rect = stage.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
-    const aspect = numCols / sumRows(numRows); // width / height
+    const aspect = (numCols * stretch) / sumRows(numRows); // width / height
 
     let w = rect.width;
     let h = w / aspect;
@@ -533,7 +579,9 @@
       const y1 = y0 + (r + 1);         // bottom = top + this row's height
       for (let c = 0; c < numCols; c++) {
         if (!grid[r * numCols + c]) continue;
-        const x0 = c, x1 = c + 1;
+        // Column width = stretch. Vertex x coords scale accordingly so
+        // edges live in the same viewBox units as the overlay.
+        const x0 = c * stretch, x1 = (c + 1) * stretch;
         // Clockwise traversal (interior to the right in y-down space)
         addEdge([x0, y0], [x1, y0]); // top:    L -> R
         addEdge([x1, y0], [x1, y1]); // right:  T -> B
@@ -588,15 +636,16 @@
   }
 
   // --- Convert one polygon into an SVG path with rounded corners ---
-  // strength t in [0, 1]:
-  //   t = 0  -> path traces the original blocky polygon
-  //   t = 1  -> each corner is cut all the way to the midpoints of its
-  //             adjacent edges and replaced with a quadratic bezier whose
-  //             control point is the original corner -> fully smoothed.
-  function polygonToPath(polygon, t) {
+  // strength01 in [0, 1] maps to a *fixed radius* in cell-width units,
+  // capped at 0.5 (half a cell) so two adjacent corners on a 1-unit
+  // edge can never overlap. Because the viewBox is isotropic with the
+  // rendered shelf (one cell-width = one row-height unit on screen),
+  // a constant radius produces 1:1 corners regardless of which row the
+  // corner sits in -- no more elongation in tall rows.
+  function polygonToPath(polygon, strength01) {
     const n = polygon.length;
     if (n < 3) return "";
-    const half = t / 2;
+    const desiredR = strength01 * 0.5;
     const parts = [];
 
     for (let i = 0; i < n; i++) {
@@ -604,14 +653,26 @@
       const curr = polygon[i];
       const next = polygon[(i + 1) % n];
 
-      const inX = curr[0] + (prev[0] - curr[0]) * half;
-      const inY = curr[1] + (prev[1] - curr[1]) * half;
-      const outX = curr[0] + (next[0] - curr[0]) * half;
-      const outY = curr[1] + (next[1] - curr[1]) * half;
+      const inDx = prev[0] - curr[0];
+      const inDy = prev[1] - curr[1];
+      const inLen = Math.hypot(inDx, inDy) || 1;
+      const outDx = next[0] - curr[0];
+      const outDy = next[1] - curr[1];
+      const outLen = Math.hypot(outDx, outDy) || 1;
 
-      if (i === 0) parts.push(`M${fmt(inX)} ${fmt(inY)}`);
-      else parts.push(`L${fmt(inX)} ${fmt(inY)}`);
-      parts.push(`Q${fmt(curr[0])} ${fmt(curr[1])} ${fmt(outX)} ${fmt(outY)}`);
+      // Clamp so a cut never exceeds half its edge -- adjacent corners
+      // sharing the same edge will at most meet at the midpoint.
+      const rIn = Math.min(desiredR, inLen / 2);
+      const rOut = Math.min(desiredR, outLen / 2);
+
+      const pInX = curr[0] + (inDx / inLen) * rIn;
+      const pInY = curr[1] + (inDy / inLen) * rIn;
+      const pOutX = curr[0] + (outDx / outLen) * rOut;
+      const pOutY = curr[1] + (outDy / outLen) * rOut;
+
+      if (i === 0) parts.push(`M${fmt(pInX)} ${fmt(pInY)}`);
+      else parts.push(`L${fmt(pInX)} ${fmt(pInY)}`);
+      parts.push(`Q${fmt(curr[0])} ${fmt(curr[1])} ${fmt(pOutX)} ${fmt(pOutY)}`);
     }
     parts.push("Z");
     return parts.join("");
@@ -715,12 +776,23 @@
     numCols = c;
     rowsInput.value = r;
     colsInput.value = c;
+    // New dims mean a new max stretch; re-apply the slider position
+    // against the new range before rebuilding.
+    recomputeStretch();
     rebuildShelf();
     render();
   }
 
   rowsInput.addEventListener("change", handleDimChange);
   colsInput.addEventListener("change", handleDimChange);
+
+  widthInput.addEventListener("input", () => {
+    widthVal.textContent = widthInput.value;
+    recomputeStretch();
+    applyStretchLayout();
+    sizeShelf();
+    render();
+  });
 
   // Keep the shelf the right size on stage resize.
   if (typeof ResizeObserver !== "undefined") {
@@ -730,6 +802,7 @@
   }
 
   // --- Init ---
+  recomputeStretch();
   rebuildShelf();
   render();
 </script>
