@@ -27,47 +27,41 @@
 
   body {
     display: flex;
-    flex-direction: column;
-    padding: 24px 32px;
-    gap: 20px;
-  }
-
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    border-bottom: 1px solid var(--rule);
-    padding-bottom: 12px;
-  }
-
-  h1 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .meta {
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: 0.6;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
   }
 
   main {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 32px;
+    position: relative;
     min-height: 0;
+    min-width: 0;
   }
 
   .stage {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 0;
+  }
+
+  /* --- Floating control panel --- */
+  .panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 220px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 100;
   }
 
   /* The shelf: N rows with heights 1..N, M equal columns.
@@ -103,11 +97,6 @@
 
   .shelf.is-smooth .overlay {
     display: block;
-  }
-
-  .control-block {
-    border-top: 1px solid var(--rule);
-    padding-top: 16px;
   }
 
   .control-block label,
@@ -239,14 +228,6 @@
 
   input[type="number"]:focus { background: #fff; }
 
-  aside {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 24px;
-    width: 260px;
-  }
-
   .input-block label {
     display: block;
     font-size: 11px;
@@ -274,52 +255,17 @@
     background: #fff;
   }
 
-  .legend {
-    font-size: 11px;
-    line-height: 1.6;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    opacity: 0.7;
-  }
-
-  .legend p { margin: 0 0 8px 0; }
-
-  .legend table {
-    border-collapse: collapse;
-    margin-top: 8px;
-  }
-
-  .legend td {
-    padding: 2px 10px 2px 0;
-    font-variant-numeric: tabular-nums;
-  }
-
-  footer {
-    border-top: 1px solid var(--rule);
-    padding-top: 12px;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0.5;
-    display: flex;
-    justify-content: space-between;
-  }
 </style>
 </head>
 <body>
-  <header>
-    <h1>Type Machine &middot; After Judd</h1>
-    <div class="meta" id="meta-line">7 &times; 7 &middot; rows 1 : 2 : 3 : 4 : 5 : 6 : 7</div>
-  </header>
-
   <main>
     <div class="stage">
       <div class="shelf" id="shelf" aria-label="Letter plotted on a seven by seven grid"></div>
     </div>
 
-    <aside>
+    <div class="panel">
       <div class="input-block">
-        <label for="letter">Type a letter</label>
+        <label for="letter">Letter</label>
         <input id="letter" type="text" maxlength="1" autocomplete="off" spellcheck="false" value="A" />
       </div>
 
@@ -358,18 +304,8 @@
           <input id="strength" type="range" min="0" max="100" value="60" disabled />
         </div>
       </div>
-
-      <div class="legend">
-        <p>One glyph at a time.<br>A–Z and 0–9.</p>
-        <p id="ratio-line">Rows 1 : 2 : 3 : 4 : 5 : 6 : 7</p>
-      </div>
-    </aside>
+    </div>
   </main>
-
-  <footer>
-    <span>Dot-matrix on a stacked shelf</span>
-    <span id="count">49 cells</span>
-  </footer>
 
 <script>
   // --- Elements ---
@@ -385,9 +321,6 @@
   const widthInput = document.getElementById("width");
   const widthVal = document.getElementById("width-val");
   const widthBlock = document.getElementById("width-block");
-  const metaLine = document.getElementById("meta-line");
-  const ratioLine = document.getElementById("ratio-line");
-  const countEl = document.getElementById("count");
 
   // --- State ---
   let numRows = 7;
@@ -476,12 +409,7 @@
     if (overlay) overlay.setAttribute("viewBox", `0 0 ${viewW} ${viewH}`);
   }
 
-  function updateLabels() {
-    const ratios = Array.from({ length: numRows }, (_, i) => i + 1).join(" : ");
-    metaLine.innerHTML = `${numCols} &times; ${numRows} &middot; rows ${ratios}`;
-    ratioLine.textContent = `Rows ${ratios}`;
-    if (countEl) countEl.textContent = `${numRows * numCols} cells`;
-  }
+  function updateLabels() {}
 
   // Fit the shelf inside the stage while honouring its aspect ratio.
   function sizeShelf() {
