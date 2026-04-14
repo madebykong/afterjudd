@@ -645,7 +645,11 @@
   function polygonToPath(polygon, strength01) {
     const n = polygon.length;
     if (n < 3) return "";
-    const desiredR = strength01 * 0.5;
+    // At slider 100 the desired radius is 1.0 cell-units -- twice the
+    // minimum edge length. The per-edge clamp below still caps each cut
+    // at half the edge length, so corners on 1-unit edges max out at 0.5
+    // while corners on longer edges (row >= 2) can round further.
+    const desiredR = strength01 * 1.0;
     const parts = [];
 
     for (let i = 0; i < n; i++) {
