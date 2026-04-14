@@ -70,28 +70,174 @@
     min-height: 0;
   }
 
-  /* The shelf: 7 rows with heights 1..7, 7 equal columns. */
+  /* The shelf: N rows with heights 1..N, M equal columns.
+     grid-template-*, width, height, and aspect-ratio are all set via JS
+     because they depend on the user-controlled row/column counts. */
   .shelf {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    grid-template-rows: 1fr 2fr 3fr 4fr 5fr 6fr 7fr;
-    width: min(80vh, 100%);
-    aspect-ratio: 7 / 28; /* 7 cols wide, 1+2+3+4+5+6+7 = 28 units tall */
-    height: 100%;
-    max-height: 90vh;
     border: 1px solid var(--rule);
     background: var(--rule);
     gap: 1px;
+    position: relative;
   }
 
   .cell {
     background: var(--empty);
-    transition: background 120ms ease;
+    transition: background-color 80ms linear;
   }
 
   .cell.on {
     background: var(--ink);
   }
+
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: none;
+    overflow: visible;
+  }
+
+  .shelf.is-smooth .overlay {
+    display: block;
+  }
+
+  .control-block {
+    border-top: 1px solid var(--rule);
+    padding-top: 16px;
+  }
+
+  .control-block label,
+  .input-block label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.6;
+  }
+
+  .toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--rule);
+  }
+
+  .toggle button {
+    appearance: none;
+    background: var(--paper);
+    color: var(--ink);
+    border: none;
+    padding: 10px 0;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .toggle button + button {
+    border-left: 1px solid var(--rule);
+  }
+
+  .toggle button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slider-row .val {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+    opacity: 0.7;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    margin: 0;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: var(--ink);
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: var(--ink);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--ink);
+    border-radius: 0;
+    margin-top: -6.5px;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--ink);
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  input[type="range"]:disabled::-webkit-slider-thumb { background: #888; }
+  input[type="range"]:disabled::-moz-range-thumb { background: #888; }
+  .control-block.is-disabled { opacity: 0.35; }
+
+  .dim-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .dim-field label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    opacity: 0.6;
+  }
+
+  input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 18px;
+    text-align: center;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    outline: none;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"]:focus { background: #fff; }
 
   aside {
     display: flex;
@@ -163,7 +309,7 @@
 <body>
   <header>
     <h1>Type Machine &middot; After Judd</h1>
-    <div class="meta">7 × 7 &middot; rows 1 : 2 : 3 : 4 : 5 : 6 : 7</div>
+    <div class="meta" id="meta-line">7 &times; 7 &middot; rows 1 : 2 : 3 : 4 : 5 : 6 : 7</div>
   </header>
 
   <main>
@@ -177,17 +323,38 @@
         <input id="letter" type="text" maxlength="1" autocomplete="off" spellcheck="false" value="A" />
       </div>
 
+      <div class="control-block">
+        <label>Grid</label>
+        <div class="dim-row">
+          <div class="dim-field">
+            <label for="rows">Rows</label>
+            <input id="rows" type="number" min="1" max="16" step="1" value="7" />
+          </div>
+          <div class="dim-field">
+            <label for="cols">Cols</label>
+            <input id="cols" type="number" min="1" max="16" step="1" value="7" />
+          </div>
+        </div>
+      </div>
+
+      <div class="control-block">
+        <label>Mode</label>
+        <div class="toggle" id="mode-toggle">
+          <button type="button" data-mode="pixel" class="active">Pixel</button>
+          <button type="button" data-mode="smooth">Smooth</button>
+        </div>
+      </div>
+
+      <div class="control-block is-disabled" id="strength-block">
+        <label for="strength">Smoothing <span class="val" id="strength-val">60</span></label>
+        <div class="slider-row">
+          <input id="strength" type="range" min="0" max="100" value="60" disabled />
+        </div>
+      </div>
+
       <div class="legend">
         <p>One glyph at a time.<br>A–Z and 0–9.</p>
-        <table>
-          <tr><td>Row 1</td><td>1×</td></tr>
-          <tr><td>Row 2</td><td>2×</td></tr>
-          <tr><td>Row 3</td><td>3×</td></tr>
-          <tr><td>Row 4</td><td>4×</td></tr>
-          <tr><td>Row 5</td><td>5×</td></tr>
-          <tr><td>Row 6</td><td>6×</td></tr>
-          <tr><td>Row 7</td><td>7×</td></tr>
-        </table>
+        <p id="ratio-line">Rows 1 : 2 : 3 : 4 : 5 : 6 : 7</p>
       </div>
     </aside>
   </main>
@@ -198,169 +365,373 @@
   </footer>
 
 <script>
-  // 7x7 bitmap font. Each row is a 7-character string of 0/1.
-  const FONT = {
-    " ": [
-      "0000000","0000000","0000000","0000000","0000000","0000000","0000000"
-    ],
-    "A": [
-      "0011100","0100010","1000001","1000001","1111111","1000001","1000001"
-    ],
-    "B": [
-      "1111110","1000001","1000001","1111110","1000001","1000001","1111110"
-    ],
-    "C": [
-      "0111110","1000001","1000000","1000000","1000000","1000001","0111110"
-    ],
-    "D": [
-      "1111100","1000010","1000001","1000001","1000001","1000010","1111100"
-    ],
-    "E": [
-      "1111111","1000000","1000000","1111110","1000000","1000000","1111111"
-    ],
-    "F": [
-      "1111111","1000000","1000000","1111110","1000000","1000000","1000000"
-    ],
-    "G": [
-      "0111110","1000001","1000000","1000111","1000001","1000001","0111110"
-    ],
-    "H": [
-      "1000001","1000001","1000001","1111111","1000001","1000001","1000001"
-    ],
-    "I": [
-      "1111111","0001000","0001000","0001000","0001000","0001000","1111111"
-    ],
-    "J": [
-      "0000001","0000001","0000001","0000001","0000001","1000001","0111110"
-    ],
-    "K": [
-      "1000001","1000010","1000100","1111000","1000100","1000010","1000001"
-    ],
-    "L": [
-      "1000000","1000000","1000000","1000000","1000000","1000000","1111111"
-    ],
-    "M": [
-      "1000001","1100011","1010101","1001001","1000001","1000001","1000001"
-    ],
-    "N": [
-      "1000001","1100001","1010001","1001001","1000101","1000011","1000001"
-    ],
-    "O": [
-      "0111110","1000001","1000001","1000001","1000001","1000001","0111110"
-    ],
-    "P": [
-      "1111110","1000001","1000001","1111110","1000000","1000000","1000000"
-    ],
-    "Q": [
-      "0111110","1000001","1000001","1000001","1001001","1000101","0111011"
-    ],
-    "R": [
-      "1111110","1000001","1000001","1111110","1000100","1000010","1000001"
-    ],
-    "S": [
-      "0111111","1000000","1000000","0111110","0000001","0000001","1111110"
-    ],
-    "T": [
-      "1111111","0001000","0001000","0001000","0001000","0001000","0001000"
-    ],
-    "U": [
-      "1000001","1000001","1000001","1000001","1000001","1000001","0111110"
-    ],
-    "V": [
-      "1000001","1000001","1000001","0100010","0100010","0010100","0001000"
-    ],
-    "W": [
-      "1000001","1000001","1000001","1000001","1001001","1010101","0100010"
-    ],
-    "X": [
-      "1000001","0100010","0010100","0001000","0010100","0100010","1000001"
-    ],
-    "Y": [
-      "1000001","0100010","0010100","0001000","0001000","0001000","0001000"
-    ],
-    "Z": [
-      "1111111","0000010","0000100","0001000","0010000","0100000","1111111"
-    ],
-    "0": [
-      "0111110","1000011","1000101","1001001","1010001","1100001","0111110"
-    ],
-    "1": [
-      "0001000","0011000","0101000","0001000","0001000","0001000","0111110"
-    ],
-    "2": [
-      "0111110","1000001","0000001","0000010","0001100","0110000","1111111"
-    ],
-    "3": [
-      "1111110","0000001","0000001","0011110","0000001","0000001","1111110"
-    ],
-    "4": [
-      "0000100","0001100","0010100","0100100","1111111","0000100","0000100"
-    ],
-    "5": [
-      "1111111","1000000","1000000","1111110","0000001","0000001","1111110"
-    ],
-    "6": [
-      "0011110","0100000","1000000","1111110","1000001","1000001","0111110"
-    ],
-    "7": [
-      "1111111","0000001","0000010","0000100","0001000","0010000","0100000"
-    ],
-    "8": [
-      "0111110","1000001","1000001","0111110","1000001","1000001","0111110"
-    ],
-    "9": [
-      "0111110","1000001","1000001","0111111","0000001","0000010","0111100"
-    ]
-  };
-
+  // --- Elements ---
   const shelf = document.getElementById("shelf");
+  const stage = document.querySelector(".stage");
   const input = document.getElementById("letter");
+  const modeToggle = document.getElementById("mode-toggle");
+  const strengthBlock = document.getElementById("strength-block");
+  const strengthInput = document.getElementById("strength");
+  const strengthVal = document.getElementById("strength-val");
+  const rowsInput = document.getElementById("rows");
+  const colsInput = document.getElementById("cols");
+  const metaLine = document.getElementById("meta-line");
+  const ratioLine = document.getElementById("ratio-line");
+  const countEl = document.getElementById("count");
 
-  // Build 49 cells once, row-major (top row first).
+  // --- State ---
+  let numRows = 7;
+  let numCols = 7;
+  let mode = "pixel";
+  let currentChar = "A";
+
   const cells = [];
-  for (let r = 0; r < 7; r++) {
-    for (let c = 0; c < 7; c++) {
-      const div = document.createElement("div");
-      div.className = "cell";
-      div.dataset.row = r;
-      div.dataset.col = c;
-      shelf.appendChild(div);
-      cells.push(div);
-    }
-  }
+  let overlay = null; // SVG element, recreated on rebuildShelf
 
-  function render(char) {
-    const key = (char || " ").toUpperCase();
-    const glyph = FONT[key] || FONT[" "];
-    for (let r = 0; r < 7; r++) {
-      const row = glyph[r];
-      for (let c = 0; c < 7; c++) {
-        const i = r * 7 + c;
-        const on = row.charAt(c) === "1";
-        cells[i].classList.toggle("on", on);
+  // --- Offscreen canvas used to determine which cells are "on" ---
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const sumRows = (n) => (n * (n + 1)) / 2;
+
+  // --- Build the shelf DOM for the current numRows / numCols ---
+  function rebuildShelf() {
+    shelf.innerHTML = "";
+    cells.length = 0;
+
+    shelf.style.gridTemplateColumns = `repeat(${numCols}, 1fr)`;
+    shelf.style.gridTemplateRows = Array.from(
+      { length: numRows },
+      (_, i) => `${i + 1}fr`
+    ).join(" ");
+    shelf.style.aspectRatio = `${numCols} / ${sumRows(numRows)}`;
+
+    for (let r = 0; r < numRows; r++) {
+      for (let c = 0; c < numCols; c++) {
+        const div = document.createElement("div");
+        div.className = "cell";
+        div.dataset.row = r;
+        div.dataset.col = c;
+        shelf.appendChild(div);
+        cells.push(div);
       }
     }
+
+    // SVG overlay sits on top of the cells. Its viewBox is in cell-units
+    // (numCols wide, sumRows tall) so polygon coordinates map directly.
+    overlay = document.createElementNS(SVG_NS, "svg");
+    overlay.setAttribute("class", "overlay");
+    overlay.setAttribute("viewBox", `0 0 ${numCols} ${sumRows(numRows)}`);
+    overlay.setAttribute("preserveAspectRatio", "none");
+    shelf.appendChild(overlay);
+
+    updateLabels();
+    sizeShelf();
   }
 
+  function updateLabels() {
+    const ratios = Array.from({ length: numRows }, (_, i) => i + 1).join(" : ");
+    metaLine.innerHTML = `${numCols} &times; ${numRows} &middot; rows ${ratios}`;
+    ratioLine.textContent = `Rows ${ratios}`;
+    if (countEl) countEl.textContent = `${numRows * numCols} cells`;
+  }
+
+  // Fit the shelf inside the stage while honouring its aspect ratio.
+  function sizeShelf() {
+    const rect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const aspect = numCols / sumRows(numRows); // width / height
+
+    let w = rect.width;
+    let h = w / aspect;
+    if (h > rect.height) {
+      h = rect.height;
+      w = h * aspect;
+    }
+    shelf.style.width = `${Math.floor(w)}px`;
+    shelf.style.height = `${Math.floor(h)}px`;
+  }
+
+  // --- Rasterize the glyph crisply and return a binary on/off grid ---
+  // Both modes use the same binary grid; smooth mode then derives a
+  // polygon outline from it and rounds the corners.
+  function computeBinaryGrid(char) {
+    const sum = sumRows(numRows);
+    const longer = Math.max(sum, numCols);
+    const unit = Math.max(6, Math.min(100, Math.floor(1000 / longer)));
+    const w = numCols * unit;
+    const h = sum * unit;
+
+    canvas.width = w;
+    canvas.height = h;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "#000000";
+    const baseSize = 120;
+    ctx.font = `900 ${baseSize}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+
+    const m = ctx.measureText(char);
+    const wG = Math.max(m.width, 1);
+    const a = m.actualBoundingBoxAscent || baseSize * 0.75;
+    const d = m.actualBoundingBoxDescent || baseSize * 0.05;
+    const hG = Math.max(a + d, 1);
+
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(w / wG, h / hG);
+    ctx.fillText(char, 0, (a - d) / 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const img = ctx.getImageData(0, 0, w, h).data;
+    const grid = new Uint8Array(numRows * numCols);
+
+    let rowY = 0;
+    for (let r = 0; r < numRows; r++) {
+      const rowH = (r + 1) * unit;
+      for (let c = 0; c < numCols; c++) {
+        const x = c * unit;
+        let sum2 = 0;
+        const count = rowH * unit;
+        for (let py = 0; py < rowH; py++) {
+          let idx = ((rowY + py) * w + x) * 4;
+          for (let px = 0; px < unit; px++) {
+            sum2 += img[idx];
+            idx += 4;
+          }
+        }
+        const coverage = 1 - sum2 / count / 255;
+        grid[r * numCols + c] = coverage >= 0.5 ? 1 : 0;
+      }
+      rowY += rowH;
+    }
+    return grid;
+  }
+
+  // --- Trace polygon outlines from the binary grid ---
+  // For every "on" cell, emit its 4 edges in clockwise order (y-down).
+  // Edges shared by two on-cells cancel out, leaving only the boundary.
+  // Then walk the directed edge graph to recover closed polygons.
+  function computePolygons(grid) {
+    const edges = new Map();        // key -> { from:[x,y], to:[x,y] }
+    const keyFor = (a, b) => `${a[0]},${a[1]}|${b[0]},${b[1]}`;
+
+    function addEdge(from, to) {
+      const reverseKey = keyFor(to, from);
+      if (edges.has(reverseKey)) {
+        edges.delete(reverseKey);
+      } else {
+        edges.set(keyFor(from, to), { from, to });
+      }
+    }
+
+    for (let r = 0; r < numRows; r++) {
+      const y0 = (r * (r + 1)) / 2;   // cumulative top of row
+      const y1 = y0 + (r + 1);         // bottom = top + this row's height
+      for (let c = 0; c < numCols; c++) {
+        if (!grid[r * numCols + c]) continue;
+        const x0 = c, x1 = c + 1;
+        // Clockwise traversal (interior to the right in y-down space)
+        addEdge([x0, y0], [x1, y0]); // top:    L -> R
+        addEdge([x1, y0], [x1, y1]); // right:  T -> B
+        addEdge([x1, y1], [x0, y1]); // bottom: R -> L
+        addEdge([x0, y1], [x0, y0]); // left:   B -> T
+      }
+    }
+
+    // Build outgoing-edge lookup keyed by vertex.
+    const outgoing = new Map();
+    for (const e of edges.values()) {
+      const k = `${e.from[0]},${e.from[1]}`;
+      if (!outgoing.has(k)) outgoing.set(k, []);
+      outgoing.get(k).push(e);
+    }
+
+    const polygons = [];
+    const visited = new Set();
+
+    for (const startEdge of edges.values()) {
+      const startKey = keyFor(startEdge.from, startEdge.to);
+      if (visited.has(startKey)) continue;
+
+      const polygon = [startEdge.from];
+      visited.add(startKey);
+      let current = startEdge;
+
+      while (true) {
+        const k = `${current.to[0]},${current.to[1]}`;
+        const outs = outgoing.get(k) || [];
+        let next = null;
+        for (const cand of outs) {
+          if (!visited.has(keyFor(cand.from, cand.to))) {
+            next = cand;
+            break;
+          }
+        }
+        if (!next) break;
+        visited.add(keyFor(next.from, next.to));
+        if (next.to[0] === startEdge.from[0] && next.to[1] === startEdge.from[1]) {
+          polygon.push(next.from);
+          break;
+        }
+        polygon.push(next.from);
+        current = next;
+      }
+
+      if (polygon.length >= 3) polygons.push(polygon);
+    }
+
+    return polygons;
+  }
+
+  // --- Convert one polygon into an SVG path with rounded corners ---
+  // strength t in [0, 1]:
+  //   t = 0  -> path traces the original blocky polygon
+  //   t = 1  -> each corner is cut all the way to the midpoints of its
+  //             adjacent edges and replaced with a quadratic bezier whose
+  //             control point is the original corner -> fully smoothed.
+  function polygonToPath(polygon, t) {
+    const n = polygon.length;
+    if (n < 3) return "";
+    const half = t / 2;
+    const parts = [];
+
+    for (let i = 0; i < n; i++) {
+      const prev = polygon[(i - 1 + n) % n];
+      const curr = polygon[i];
+      const next = polygon[(i + 1) % n];
+
+      const inX = curr[0] + (prev[0] - curr[0]) * half;
+      const inY = curr[1] + (prev[1] - curr[1]) * half;
+      const outX = curr[0] + (next[0] - curr[0]) * half;
+      const outY = curr[1] + (next[1] - curr[1]) * half;
+
+      if (i === 0) parts.push(`M${fmt(inX)} ${fmt(inY)}`);
+      else parts.push(`L${fmt(inX)} ${fmt(inY)}`);
+      parts.push(`Q${fmt(curr[0])} ${fmt(curr[1])} ${fmt(outX)} ${fmt(outY)}`);
+    }
+    parts.push("Z");
+    return parts.join("");
+  }
+
+  function fmt(n) {
+    // Trim trailing zeros for shorter SVG paths.
+    return Math.round(n * 1000) / 1000;
+  }
+
+  function paintPixel(grid) {
+    for (let i = 0; i < cells.length; i++) {
+      cells[i].classList.toggle("on", !!grid[i]);
+    }
+    if (overlay) overlay.innerHTML = "";
+  }
+
+  function paintSmooth(grid, strength01) {
+    // Cells stay empty; the SVG path is the only ink in smooth mode.
+    for (let i = 0; i < cells.length; i++) {
+      cells[i].classList.remove("on");
+    }
+    if (!overlay) return;
+
+    const polygons = computePolygons(grid);
+    const d = polygons
+      .map((p) => polygonToPath(p, strength01))
+      .join("");
+
+    overlay.innerHTML = d
+      ? `<path d="${d}" fill="#111" fill-rule="nonzero" />`
+      : "";
+  }
+
+  function render() {
+    const key = (currentChar || " ").toUpperCase();
+    const grid = computeBinaryGrid(key);
+
+    if (mode === "smooth") {
+      shelf.classList.add("is-smooth");
+      const t = (parseInt(strengthInput.value, 10) || 0) / 100;
+      paintSmooth(grid, t);
+    } else {
+      shelf.classList.remove("is-smooth");
+      paintPixel(grid);
+    }
+  }
+
+  // --- Events ---
   input.addEventListener("input", (e) => {
-    const v = e.target.value;
-    // Keep only the last character, uppercase it.
-    const ch = v.slice(-1).toUpperCase();
+    const ch = e.target.value.slice(-1).toUpperCase();
     e.target.value = ch;
-    render(ch);
+    currentChar = ch || " ";
+    render();
   });
 
-  // Also accept typing anywhere on the page.
   window.addEventListener("keydown", (e) => {
-    if (document.activeElement === input) return;
+    const active = document.activeElement;
+    if (active === input || active === rowsInput || active === colsInput) return;
     if (e.key.length === 1 && /[a-z0-9 ]/i.test(e.key)) {
       input.value = e.key.toUpperCase();
-      render(input.value);
+      currentChar = input.value || " ";
+      render();
       e.preventDefault();
     }
   });
 
-  render(input.value);
+  modeToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-mode]");
+    if (!btn) return;
+    mode = btn.dataset.mode;
+    for (const b of modeToggle.querySelectorAll("button")) {
+      b.classList.toggle("active", b === btn);
+    }
+    const isSmooth = mode === "smooth";
+    strengthInput.disabled = !isSmooth;
+    strengthBlock.classList.toggle("is-disabled", !isSmooth);
+    render();
+  });
+
+  strengthInput.addEventListener("input", () => {
+    strengthVal.textContent = strengthInput.value;
+    if (mode === "smooth") render();
+  });
+
+  function clampDim(v, fallback) {
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.min(16, n));
+  }
+
+  function handleDimChange() {
+    const r = clampDim(rowsInput.value, numRows);
+    const c = clampDim(colsInput.value, numCols);
+    if (r === numRows && c === numCols) {
+      rowsInput.value = r;
+      colsInput.value = c;
+      return;
+    }
+    numRows = r;
+    numCols = c;
+    rowsInput.value = r;
+    colsInput.value = c;
+    rebuildShelf();
+    render();
+  }
+
+  rowsInput.addEventListener("change", handleDimChange);
+  colsInput.addEventListener("change", handleDimChange);
+
+  // Keep the shelf the right size on stage resize.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => sizeShelf()).observe(stage);
+  } else {
+    window.addEventListener("resize", sizeShelf);
+  }
+
+  // --- Init ---
+  rebuildShelf();
+  render();
 </script>
 </body>
 </html>
