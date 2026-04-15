@@ -4,6 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>After Judd</title>
+<meta property="og:title" content="After Judd" />
+<meta property="og:description" content="A type machine based on the proportions of a Donald Judd shelf." />
+<meta property="og:image" content="https://madebykong.github.io/afterjudd/og.png" />
+<meta property="og:url" content="https://madebykong.github.io/afterjudd/" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://madebykong.github.io/afterjudd/og.png" />
 <style>
   :root {
     --ink: #111;
@@ -801,9 +808,13 @@
   }
 
   // --- Panel collapse ---
+  const panel = document.getElementById("panel");
   document.getElementById("panel-header").addEventListener("click", () => {
-    document.getElementById("panel").classList.toggle("collapsed");
+    panel.classList.toggle("collapsed");
   });
+  const panelParam = new URLSearchParams(location.search).get("panel");
+  if (panelParam === "closed") panel.classList.add("collapsed");
+  if (panelParam === "hidden") panel.style.display = "none";
 
   // --- Init ---
   recomputeStretch();
