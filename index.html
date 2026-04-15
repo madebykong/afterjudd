@@ -47,6 +47,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
   /* --- Floating control panel --- */
@@ -57,11 +58,58 @@
     width: 220px;
     background: var(--paper);
     border: 1px solid var(--rule);
-    padding: 16px;
+    z-index: 100;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .panel-header span {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .panel-toggle {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .panel-toggle svg {
+    transition: transform 150ms ease;
+  }
+
+  .panel.collapsed .panel-toggle svg {
+    transform: rotate(180deg);
+  }
+
+  .panel-body {
+    padding: 0 12px 12px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    z-index: 100;
+    border-top: 1px solid var(--rule);
+    overflow: hidden;
+    transition: max-height 200ms ease, opacity 200ms ease, padding 200ms ease;
+    max-height: 600px;
+    opacity: 1;
+  }
+
+  .panel.collapsed .panel-body {
+    max-height: 0;
+    opacity: 0;
+    padding-bottom: 0;
+    pointer-events: none;
   }
 
   /* The shelf: N rows with heights 1..N, M equal columns.
@@ -263,7 +311,16 @@
       <div class="shelf" id="shelf" aria-label="Letter plotted on a seven by seven grid"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panel">
+      <div class="panel-header" id="panel-header">
+        <span>Controls</span>
+        <div class="panel-toggle">
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 1L5 5L9 1" stroke="#111" stroke-width="1.5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body">
       <div class="input-block">
         <label for="letter">Letter</label>
         <input id="letter" type="text" maxlength="1" autocomplete="off" spellcheck="false" value="A" />
@@ -303,6 +360,7 @@
         <div class="slider-row">
           <input id="strength" type="range" min="0" max="100" value="60" disabled />
         </div>
+      </div>
       </div>
     </div>
   </main>
@@ -411,16 +469,21 @@
 
   function updateLabels() {}
 
+  const STAGE_PAD = 64; // px of space above and below the shelf
+
   // Fit the shelf inside the stage while honouring its aspect ratio.
   function sizeShelf() {
     const rect = stage.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const aspect = (numCols * stretch) / sumRows(numRows); // width / height
 
-    let w = rect.width;
+    const availW = rect.width;
+    const availH = rect.height - STAGE_PAD * 2;
+
+    let w = availW;
     let h = w / aspect;
-    if (h > rect.height) {
-      h = rect.height;
+    if (h > availH) {
+      h = availH;
       w = h * aspect;
     }
     shelf.style.width = `${Math.floor(w)}px`;
@@ -737,6 +800,11 @@
   } else {
     window.addEventListener("resize", sizeShelf);
   }
+
+  // --- Panel collapse ---
+  document.getElementById("panel-header").addEventListener("click", () => {
+    document.getElementById("panel").classList.toggle("collapsed");
+  });
 
   // --- Init ---
   recomputeStretch();
