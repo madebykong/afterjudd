@@ -65,7 +65,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
+    padding: 12px;
     cursor: pointer;
     user-select: none;
   }
@@ -94,13 +94,13 @@
   }
 
   .panel-body {
-    padding: 0 12px 12px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 16px;
     border-top: 1px solid var(--rule);
     overflow: hidden;
-    transition: max-height 200ms ease, opacity 200ms ease, padding 200ms ease;
+    transition: max-height 400ms ease, opacity 400ms ease, padding 400ms ease;
     max-height: 600px;
     opacity: 1;
   }
@@ -153,7 +153,7 @@
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 16px;
     opacity: 0.6;
   }
 
@@ -322,12 +322,10 @@
       </div>
       <div class="panel-body">
       <div class="input-block">
-        <label for="letter">Letter</label>
         <input id="letter" type="text" maxlength="1" autocomplete="off" spellcheck="false" value="A" />
       </div>
 
       <div class="control-block">
-        <label>Grid</label>
         <div class="dim-row">
           <div class="dim-field">
             <label for="rows">Rows</label>
@@ -344,11 +342,11 @@
         <label for="width">Width <span class="val" id="width-val">0</span></label>
         <div class="slider-row">
           <input id="width" type="range" min="0" max="100" value="0" />
+          <br />
         </div>
       </div>
 
       <div class="control-block">
-        <label>Mode</label>
         <div class="toggle" id="mode-toggle">
           <button type="button" data-mode="pixel" class="active">Pixel</button>
           <button type="button" data-mode="smooth">Smooth</button>
@@ -356,9 +354,10 @@
       </div>
 
       <div class="control-block is-disabled" id="strength-block">
-        <label for="strength">Smoothing <span class="val" id="strength-val">60</span></label>
+        <label for="strength"><span class="val" id="strength-val">60</span></label>
         <div class="slider-row">
           <input id="strength" type="range" min="0" max="100" value="60" disabled />
+          <br />
         </div>
       </div>
       </div>
