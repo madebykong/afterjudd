@@ -24,7 +24,6 @@
   html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
     background: var(--paper);
     color: var(--ink);
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -33,19 +32,51 @@
   }
 
   body {
-    display: flex;
     margin: 0;
     padding: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
+    width: 100%;
+    min-height: 100vh;
   }
 
   main {
-    flex: 1;
     position: relative;
-    min-height: 0;
-    min-width: 0;
+    width: 100%;
+    height: 100vh;
+  }
+
+  .alphabet {
+    padding: 64px;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 32px 20px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .alphabet-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .alphabet-item .mini-wrap {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .alphabet-item .shelf {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .alphabet-item .mini-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    font-variant-numeric: tabular-nums;
   }
 
   .stage {
@@ -59,7 +90,7 @@
 
   /* --- Floating control panel --- */
   .panel {
-    position: absolute;
+    position: fixed;
     top: 20px;
     right: 20px;
     width: 220px;
@@ -371,6 +402,8 @@
     </div>
   </main>
 
+  <section id="alphabet" class="alphabet" aria-label="Full alphabet plotted on Judd shelves"></section>
+
 <script>
   // --- Elements ---
   const shelf = document.getElementById("shelf");
@@ -421,6 +454,12 @@
 
   const cells = [];
   let overlay = null; // SVG element, recreated on rebuildShelf
+
+  // Mini-shelves for the alphabet section.
+  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const alphabetEl = document.getElementById("alphabet");
+  // Each mini: { char, shelfEl, cells: [], overlay }
+  const minis = [];
 
   // --- Offscreen canvas used to determine which cells are "on" ---
   const canvas = document.createElement("canvas");
@@ -474,6 +513,74 @@
   }
 
   function updateLabels() {}
+
+  // Build the 36 mini shelves (A-Z, 0-9). Each mirrors the main shelf's
+  // structure: N proportional rows, M equal columns, plus an SVG overlay.
+  function rebuildMinis() {
+    alphabetEl.innerHTML = "";
+    minis.length = 0;
+
+    for (const ch of ALPHABET) {
+      const item = document.createElement("div");
+      item.className = "alphabet-item";
+
+      const wrap = document.createElement("div");
+      wrap.className = "mini-wrap";
+
+      const mini = document.createElement("div");
+      mini.className = "shelf";
+      mini.style.gridTemplateColumns = `repeat(${numCols}, 1fr)`;
+      mini.style.gridTemplateRows = Array.from(
+        { length: numRows },
+        (_, i) => `${i + 1}fr`
+      ).join(" ");
+
+      const miniCells = [];
+      for (let r = 0; r < numRows; r++) {
+        for (let c = 0; c < numCols; c++) {
+          const d = document.createElement("div");
+          d.className = "cell";
+          mini.appendChild(d);
+          miniCells.push(d);
+        }
+      }
+
+      const miniOverlay = document.createElementNS(SVG_NS, "svg");
+      miniOverlay.setAttribute("class", "overlay");
+      miniOverlay.setAttribute("preserveAspectRatio", "none");
+      mini.appendChild(miniOverlay);
+
+      wrap.appendChild(mini);
+
+      const label = document.createElement("div");
+      label.className = "mini-label";
+      label.textContent = ch;
+
+      item.appendChild(wrap);
+      item.appendChild(label);
+      alphabetEl.appendChild(item);
+
+      minis.push({ char: ch, shelfEl: mini, cells: miniCells, overlay: miniOverlay });
+    }
+
+    applyMiniStretchLayout();
+  }
+
+  // Apply current stretch to all mini shelves' aspect-ratio and viewBox.
+  function applyMiniStretchLayout() {
+    const viewW = numCols * stretch;
+    const viewH = sumRows(numRows);
+    for (const m of minis) {
+      m.shelfEl.style.aspectRatio = `${viewW} / ${viewH}`;
+      m.overlay.setAttribute("viewBox", `0 0 ${viewW} ${viewH}`);
+    }
+  }
+
+  function renderMinis() {
+    for (const m of minis) {
+      paintShelf(m.char, m.shelfEl, m.cells, m.overlay);
+    }
+  }
 
   const STAGE_PAD = 64; // px of space above and below the shelf
 
@@ -689,42 +796,46 @@
     return Math.round(n * 1000) / 1000;
   }
 
-  function paintPixel(grid) {
-    for (let i = 0; i < cells.length; i++) {
-      cells[i].classList.toggle("on", !!grid[i]);
+  function paintPixel(grid, cellsArr, overlayEl) {
+    for (let i = 0; i < cellsArr.length; i++) {
+      cellsArr[i].classList.toggle("on", !!grid[i]);
     }
-    if (overlay) overlay.innerHTML = "";
+    if (overlayEl) overlayEl.innerHTML = "";
   }
 
-  function paintSmooth(grid, strength01) {
+  function paintSmooth(grid, strength01, cellsArr, overlayEl) {
     // Cells stay empty; the SVG path is the only ink in smooth mode.
-    for (let i = 0; i < cells.length; i++) {
-      cells[i].classList.remove("on");
+    for (let i = 0; i < cellsArr.length; i++) {
+      cellsArr[i].classList.remove("on");
     }
-    if (!overlay) return;
+    if (!overlayEl) return;
 
     const polygons = computePolygons(grid);
     const d = polygons
       .map((p) => polygonToPath(p, strength01))
       .join("");
 
-    overlay.innerHTML = d
+    overlayEl.innerHTML = d
       ? `<path d="${d}" fill="#111" fill-rule="nonzero" />`
       : "";
   }
 
-  function render() {
-    const key = (currentChar || " ").toUpperCase();
+  function paintShelf(char, shelfEl, cellsArr, overlayEl) {
+    const key = (char || " ").toUpperCase();
     const grid = computeBinaryGrid(key);
-
     if (mode === "smooth") {
-      shelf.classList.add("is-smooth");
+      shelfEl.classList.add("is-smooth");
       const t = (parseInt(strengthInput.value, 10) || 0) / 100;
-      paintSmooth(grid, t);
+      paintSmooth(grid, t, cellsArr, overlayEl);
     } else {
-      shelf.classList.remove("is-smooth");
-      paintPixel(grid);
+      shelfEl.classList.remove("is-smooth");
+      paintPixel(grid, cellsArr, overlayEl);
     }
+  }
+
+  function render(opts) {
+    paintShelf(currentChar, shelf, cells, overlay);
+    if (!opts || opts.minis !== false) renderMinis();
   }
 
   // --- Events ---
@@ -732,7 +843,7 @@
     const ch = e.target.value.slice(-1).toUpperCase();
     e.target.value = ch;
     currentChar = ch || " ";
-    render();
+    render({ minis: false });
   });
 
   window.addEventListener("keydown", (e) => {
@@ -741,7 +852,7 @@
     if (e.key.length === 1 && /[a-z0-9 ]/i.test(e.key)) {
       input.value = e.key.toUpperCase();
       currentChar = input.value || " ";
-      render();
+      render({ minis: false });
       e.preventDefault();
     }
   });
@@ -786,6 +897,7 @@
     // against the new range before rebuilding.
     recomputeStretch();
     rebuildShelf();
+    rebuildMinis();
     render();
   }
 
@@ -796,6 +908,7 @@
     widthVal.textContent = widthInput.value;
     recomputeStretch();
     applyStretchLayout();
+    applyMiniStretchLayout();
     sizeShelf();
     render();
   });
@@ -819,6 +932,7 @@
   // --- Init ---
   recomputeStretch();
   rebuildShelf();
+  rebuildMinis();
   render();
 </script>
 </body>
